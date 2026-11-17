@@ -1,0 +1,83 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kb-topology"
+version = "0.1.0"
+description = "Navigate, search and validate an OKF knowledge base using the topology of its links."
+readme = "README.md"
+requires-python = ">=3.13"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Igor Gladyshev" }]
+keywords = ["okf", "knowledge-base", "graph", "topology", "link-validation", "semantic-search"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Documentation",
+    "Typing :: Typed",
+]
+# The core (adapter, link graph, validation, navigation, keyword search, review store)
+# needs only PyYAML. Semantic search and the HTTP service are optional extras.
+dependencies = [
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+# Local embedding model (all-MiniLM-L6-v2 run in numpy). The model files themselves are not
+# installed; point KB_TOPOLOGY_MODEL_DIR or --model-dir at a directory that contains them.
+semantic = [
+    "numpy>=2.0",
+    "safetensors>=0.4",
+    "tokenizers>=0.20",
+]
+# HTTP service over the same functions: `kb-topology serve`.
+server = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+]
+all = [
+    "kb-topology[semantic,server]",
+]
+
+[project.scripts]
+kb-topology = "kb_topology.__main__:main"
+
+[dependency-groups]
+# Everything the tests and the release steps need, including the optional extras.
+dev = [
+    "build>=1.2",
+    "fastapi>=0.115",
+    "httpx>=0.28.1",
+    "numpy>=2.0",
+    "pytest>=9.0",
+    "safetensors>=0.4",
+    "tokenizers>=0.20",
+    "twine>=6.0",
+    "uvicorn>=0.30",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["kb_topology"]
+
+[tool.hatch.build.targets.sdist]
+# Source, README and tests. The design documents stay in the repository only.
+include = [
+    "/kb_topology",
+    "/tests",
+    "/README.md",
+    "/LICENSE",
+    "/NOTICE",
+]
+exclude = [
+    "/tests/test_prod_bundle.py",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

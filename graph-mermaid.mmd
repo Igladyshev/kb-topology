@@ -1,0 +1,104 @@
+flowchart LR
+    n000["dat-customer-1"]
+    n001["dat-customer-2"]
+    n002["dat-customer-3"]
+    n003["dat-inventory-1"]
+    n004["dat-inventory-2"]
+    n005["dat-inventory-3"]
+    n006["dat-orders-1"]
+    n007["dat-orders-2"]
+    n008["dat-orders-3"]
+    n009["dat-payments-1"]
+    n010["dat-payments-2"]
+    n011["dat-payments-3"]
+    n012["kaf-customer-1"]
+    n013["kaf-customer-2"]
+    n014["kaf-customer-3"]
+    n015["kaf-inventory-1"]
+    n016["kaf-inventory-2"]
+    n017["kaf-inventory-3"]
+    n018["kaf-orders-1"]
+    n019["kaf-orders-2"]
+    n020["kaf-orders-3"]
+    n021["kaf-payments-1"]
+    n022["kaf-payments-2"]
+    n023["kaf-payments-3"]
+    n024["pip-customer-1"]
+    n025["pip-customer-2"]
+    n026["pip-customer-3"]
+    n027["pip-inventory-1"]
+    n028["pip-inventory-2"]
+    n029["pip-inventory-3"]
+    n030["pip-orders-1"]
+    n031["pip-orders-2"]
+    n032["pip-orders-3"]
+    n033["pip-payments-1"]
+    n034["pip-payments-2"]
+    n035["pip-payments-3"]
+    n036["ser-customer-1"]
+    n037["ser-customer-2"]
+    n038["ser-customer-3"]
+    n039["ser-inventory-1"]
+    n040["ser-inventory-2"]
+    n041["ser-inventory-3"]
+    n042["ser-orders-1"]
+    n043["ser-orders-2"]
+    n044["ser-orders-3"]
+    n045["ser-payments-1"]
+    n046["ser-payments-2"]
+    n047["ser-payments-3"]
+    n000 -- "related" --> n001
+    n000 -- "publishes" --> n012
+    n001 -- "related" --> n002
+    n003 -- "related" --> n004
+    n003 -- "publishes" --> n015
+    n004 -- "related" --> n005
+    n006 -- "related" --> n007
+    n006 -- "publishes" --> n018
+    n007 -- "related" --> n008
+    n007 -- "reads" --> n038
+    n009 -- "related" --> n010
+    n009 -- "publishes" --> n021
+    n009 -- "updates" --> n032
+    n010 -- "related" --> n011
+    n012 -- "related" --> n013
+    n013 -- "related" --> n014
+    n013 -- "consumed-by" --> n024
+    n015 -- "related" --> n016
+    n016 -- "related" --> n017
+    n016 -- "consumed-by" --> n027
+    n018 -- "related" --> n019
+    n019 -- "related" --> n020
+    n019 -- "consumed-by" --> n030
+    n020 -- "emits" --> n041
+    n021 -- "related" --> n022
+    n022 -- "related" --> n023
+    n022 -- "consumed-by" --> n033
+    n024 -- "related" --> n025
+    n025 -- "related" --> n026
+    n025 -- "feeds" --> n036
+    n027 -- "related" --> n028
+    n028 -- "related" --> n029
+    n028 -- "feeds" --> n039
+    n030 -- "related" --> n031
+    n031 -- "related" --> n032
+    n031 -- "feeds" --> n042
+    n033 -- "related" --> n034
+    n034 -- "related" --> n035
+    n034 -- "feeds" --> n045
+    n036 -- "related" --> n037
+    n037 -- "related" --> n038
+    n039 -- "related" --> n040
+    n040 -- "related" --> n041
+    n042 -- "related" --> n043
+    n043 -- "related" --> n044
+    n045 -- "related" --> n046
+    n046 -- "related" --> n047
+    class n000,n001,n002,n003,n004,n005,n006,n007,n008,n009,n010,n011 databases;
+    class n012,n013,n014,n015,n016,n017,n018,n019,n020,n021,n022,n023 kafka_topics;
+    class n024,n025,n026,n027,n028,n029,n030,n031,n032,n033,n034,n035 pipelines;
+    class n036,n037,n038,n039,n040,n041,n042,n043,n044,n045,n046,n047 services;
+    classDef databases fill:#e3f2fd,stroke:#546e7a,stroke-width:1px;
+    classDef kafka_topics fill:#e8f5e9,stroke:#546e7a,stroke-width:1px;
+    classDef pipelines fill:#fff3e0,stroke:#546e7a,stroke-width:1px;
+    classDef services fill:#f3e5f5,stroke:#546e7a,stroke-width:1px;
