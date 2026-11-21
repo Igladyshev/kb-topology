@@ -36,9 +36,20 @@ class SearchHit:
     node_id: str
     score: float
     matched_terms: list[str]
+    copies: list[str] | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {"node_id": self.node_id, "score": round(self.score, 4), "matched_terms": self.matched_terms}
+        data = {"node_id": self.node_id, "score": round(self.score, 4), "matched_terms": self.matched_terms}
+        if self.copies is not None:
+            data["copies"] = self.copies
+        return data
+
+
+def status_factor(status_weights: dict[str, float]):
+    """Return a score factor that down-ranks nodes by declared status."""
+    def factor(node: Node) -> float:
+        return float(status_weights.get(node.status or "", 1.0))
+    return factor
 
 
 def _fields(n: Node) -> dict[str, str]:
@@ -96,6 +107,8 @@ class SearchIndex:
         query: str,
         node_ok=None,
         limit: int = 20,
+        score_factor=None,
+        collapse: bool = False,
     ) -> tuple[int, list[SearchHit]]:
         """Return (total matches, top ``limit`` hits)."""
         terms = list(dict.fromkeys(tokenize(query)))
@@ -113,10 +126,25 @@ class SearchIndex:
         wanted = " ".join(terms)
         hits: list[SearchHit] = []
         for nid, score in scores.items():
-            if node_ok is not None and not node_ok(self.snap.nodes[nid]):
+            node = self.snap.nodes[nid]
+            if node_ok is not None and not node_ok(node):
                 continue
             if self.titles[nid] == wanted:
                 score += EXACT_TITLE_BONUS
+            if score_factor is not None:
+                score *= score_factor(node)
             hits.append(SearchHit(nid, score, sorted(matched[nid])))
         hits.sort(key=lambda h: (-h.score, h.node_id))
+        if collapse:
+            grouped: dict[str, list[SearchHit]] = {}
+            for hit in hits:
+                family = self.snap.family_of(hit.node_id)
+                grouped.setdefault(family, []).append(hit)
+            collapsed: list[SearchHit] = []
+            for family, copies in grouped.items():
+                best = copies[0]
+                ids = sorted({hit.node_id for hit in copies})
+                collapsed.append(SearchHit(best.node_id, best.score, best.matched_terms, ids))
+            collapsed.sort(key=lambda h: (-h.score, h.node_id))
+            hits = collapsed
         return len(hits), hits[:limit]

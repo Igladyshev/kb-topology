@@ -12,7 +12,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 import yaml
 
@@ -147,6 +147,7 @@ def load_snapshot(
     env: str | None = None,
     workers: int = 8,
     alias_rules: AliasRules | None = None,
+    documents: Iterable[tuple[str, dict[str, Any], str]] | None = None,
 ) -> Snapshot:
     """Build a Snapshot from the OKF bundle at ``root`` for environment ``env``.
 
@@ -159,10 +160,21 @@ def load_snapshot(
     env = env or root.name
     diag = Diagnostics()
 
-    paths = _iter_md_paths(root)
-    diag.md_files = len(paths)
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        parsed = list(pool.map(lambda p: _parse_file(root, p), paths))
+    if documents is None:
+        paths = _iter_md_paths(root)
+        diag.md_files = len(paths)
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            parsed = list(pool.map(lambda p: _parse_file(root, p), paths))
+    else:
+        parsed = []
+        for path, frontmatter, body in documents:
+            rel = path if path.startswith("/") else "/" + path
+            canonical = yaml.safe_dump(frontmatter, sort_keys=True).encode("utf-8") + body.encode("utf-8")
+            content_hash = hashlib.sha256(canonical).hexdigest()
+            links = extract_body_links(body, rel) if frontmatter.get("type") else []
+            parsed.append(_Parsed(rel, content_hash, frontmatter, None, links))
+        parsed.sort(key=lambda p: p.path)
+        diag.md_files = len(parsed)
 
     version = _read_marker(root, "VERSION")
     digest = hashlib.sha256("\n".join([env, version or ""]).encode())

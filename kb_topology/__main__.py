@@ -66,6 +66,55 @@ def run_calibration(state_dir: Path, env: str | None, apply: bool, min_samples: 
     return result
 
 
+def run_eval(root: Path, queries_path: Path, engine: str = "keyword", model_dir: Path | None = None) -> dict:
+    """Run a versioned evaluation query set and return a JSON report."""
+    import yaml
+
+    snapshot = load_snapshot(root)
+    rows = yaml.safe_load(queries_path.read_text(encoding="utf-8")) or []
+    if not isinstance(rows, list):
+        raise ValueError("evaluation queries must be a YAML list")
+    keyword = __import__("kb_topology.search", fromlist=["SearchIndex"]).SearchIndex(snapshot)
+    ranks: list[dict] = []
+    recalls = 0
+    reciprocal = 0.0
+    for row in rows:
+        query = str(row["query"])
+        relevant = set(row.get("relevant", []))
+        if engine == "keyword":
+            _, hits = keyword.search(query, limit=10)
+            ids = [h.node_id for h in hits]
+        else:
+            if model_dir is None:
+                raise ValueError("semantic eval requires --model-dir and a semantic provider")
+            from tempfile import TemporaryDirectory
+            from .analysis import analyze
+            from .embeddings import EmbeddingStore, MiniLMProvider
+            from .navigation import Navigator
+            from .semantic import SemanticService
+            provider = MiniLMProvider(model_dir)
+            with TemporaryDirectory() as cache:
+                service = SemanticService(snapshot, provider, EmbeddingStore(cache, provider.model_id), Navigator(analyze(snapshot)), keyword)
+                service.build()
+                if service.state != "ready":
+                    raise RuntimeError(service.error or "semantic index failed")
+                ids = [h.node_id for h in service.search(query, top_k=10)]
+        def relevant_hit(node_id: str) -> bool:
+            return node_id in relevant or any(node_id.endswith(str(path)) for path in relevant)
+        first = next((i + 1 for i, node_id in enumerate(ids) if relevant_hit(node_id)), None)
+        ranks.append({"query": query, "first_relevant_rank": first, "hits": ids})
+        if first is not None:
+            recalls += 1
+            reciprocal += 1.0 / first
+    return {
+        "engine": engine,
+        "queries": len(rows),
+        "recall@10": recalls / len(rows) if rows else 0.0,
+        "mrr": reciprocal / len(rows) if rows else 0.0,
+        "per_query": ranks,
+    }
+
+
 def main() -> None:
     parser = ArgumentParser(prog="kb_topology", description="Topology index over an OKF bundle (read-only).")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -86,6 +135,12 @@ def main() -> None:
         p.add_argument("--state-dir", type=Path, help=state_help)
     for name in ("embed", "serve"):
         sub.choices[name].add_argument("--model-dir", type=Path, help="Local embedding model directory (default: $KB_TOPOLOGY_MODEL_DIR or ~/.semantic_search/models/all-MiniLM-L6-v2)")
+    ev = sub.add_parser("eval", help="Measure keyword or semantic search against a query set")
+    ev.add_argument("--root", type=Path, required=True, help="OKF bundle directory")
+    ev.add_argument("--queries", type=Path, required=True, help="YAML evaluation query set")
+    ev.add_argument("--engine", choices=("keyword", "semantic"), default="keyword")
+    ev.add_argument("--model-dir", type=Path)
+    ev.add_argument("--out", type=Path, help="Optional JSON report path")
     cal = sub.add_parser("calibrate", help="Suggest validation weights from review decisions (writes weights.json with --apply)")
     cal.add_argument("--state-dir", type=Path, help="Tool-owned state directory (default: $KB_TOPOLOGY_STATE_DIR or ./.kb-topology)")
     cal.add_argument("--env", help="Only use decisions for this environment")
@@ -99,6 +154,14 @@ def main() -> None:
     serve.add_argument("--no-semantic", action="store_true", help="Do not load the embedding model")
     args = parser.parse_args()
 
+    if args.command == "eval":
+        report = run_eval(args.root, args.queries, args.engine, args.model_dir)
+        text = json.dumps(report, indent=2) + "\n"
+        print(text, end="")
+        if args.out:
+            args.out.parent.mkdir(parents=True, exist_ok=True)
+            args.out.write_text(text, encoding="utf-8")
+        return
     if args.command == "calibrate":
         print(json.dumps(run_calibration(resolve_state_dir(args.state_dir), args.env, args.apply, args.min_samples), indent=2))
         return

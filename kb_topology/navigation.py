@@ -234,6 +234,32 @@ class Navigator:
             ],
         }
 
+    def related(self, node_id: str, depth: int = 1, limit: int = 200) -> list[dict[str, Any]]:
+        """Related nodes with graph distance and direction, for keyword-hit grouping."""
+        if node_id not in self.snap.nodes:
+            return []
+        seen = {node_id}
+        frontier = [node_id]
+        found: list[dict[str, Any]] = []
+        for distance in range(1, max(depth, 0) + 1):
+            nxt: list[str] = []
+            for cur in frontier:
+                for other, idx in self.steps(cur, "both"):
+                    if other in seen:
+                        continue
+                    seen.add(other)
+                    nxt.append(other)
+                    edge = self.snap.edges[idx]
+                    direction = "downstream" if edge.source_id == cur else "upstream"
+                    found.append({
+                        "node_id": other,
+                        "distance": distance,
+                        "direction": direction,
+                        "score": 1.0,
+                    })
+            frontier = nxt
+        return found[:limit]
+
     def shortest_path(
         self,
         source: str,

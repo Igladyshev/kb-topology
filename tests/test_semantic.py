@@ -76,7 +76,7 @@ def test_body_hints_extract_columns_and_headings():
         "| Column | Type |\n|---|---|\n| `UUID` | `VARCHAR` |\n| `PLAYER_ID` | `VARCHAR` |\n| `UUID` | dup |\n"
         "## Lineage notes\n"
     )
-    columns, headings = body_hints(text)
+    columns, headings, terms = body_hints(text)
     assert columns == ["UUID", "PLAYER_ID"]
     assert headings == ["Lineage notes"]  # generic headings and footnote markers are dropped
 
@@ -91,7 +91,7 @@ def test_embedding_text_puts_identity_first(tmp_path: Path):
     )
     node = next(iter(load_snapshot(root).nodes.values()))
     text = embedding_text(node, root)
-    assert text.startswith("alpha.comp.ledger. Table. group comp. Ledger table.")
+    assert text.startswith("alpha.comp.ledger. Table. Ledger table.")
     assert "columns: UUID, ISSUED" in text
     assert embedding_text(node, None).endswith("db alpha tables Ledger")  # no body hints without a root
 

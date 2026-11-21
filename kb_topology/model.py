@@ -85,6 +85,34 @@ class Snapshot:
     forward: dict[str, list[int]] = field(default_factory=dict)  # node id -> edge indexes
     reverse: dict[str, list[int]] = field(default_factory=dict)
 
+    def family_of(self, node_id: str) -> str:
+        """Family key for deployment-specific copies; otherwise the node id."""
+        node = self.nodes.get(node_id)
+        if node is None:
+            return node_id
+        fqn = node.metadata.get("fully_qualified_name")
+        deployment = node.metadata.get("deployment_code")
+        if not isinstance(fqn, str) or not isinstance(deployment, str) or not fqn or not deployment:
+            return node_id
+        segments = fqn.split(".")
+        replaced = False
+        for i, segment in enumerate(segments):
+            if segment == deployment:
+                segments[i] = "*"
+                replaced = True
+        if replaced:
+            return ".".join(segments)
+        if deployment in fqn:
+            return fqn.replace(deployment, "*")
+        return node_id
+
+    def families(self) -> dict[str, list[str]]:
+        families: dict[str, list[str]] = {}
+        for node_id in self.nodes:
+            key = self.family_of(node_id)
+            families.setdefault(key, []).append(node_id)
+        return families
+
     def summary(self) -> dict[str, Any]:
         return {
             "kb_hash": self.kb_hash,

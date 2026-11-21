@@ -98,7 +98,7 @@ def create_app(
             svc.start()
         yield
 
-    app = FastAPI(title="kb-topology", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="kb-topology", version="0.2.0", lifespan=lifespan)
 
     def get_snapshot(kb_hash: str) -> Snapshot:
         snap = by_hash.get(kb_hash)

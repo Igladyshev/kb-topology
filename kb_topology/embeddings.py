@@ -54,7 +54,14 @@ class MiniLMProvider:
 
     HEADS = 12
 
-    def __init__(self, model_dir: str | Path, max_tokens: int = 128, batch_size: int = 32) -> None:
+    def __init__(
+        self,
+        model_dir: str | Path,
+        max_tokens: int = 128,
+        batch_size: int = 32,
+        query_prefix: str = "",
+        passage_prefix: str = "",
+    ) -> None:
         from safetensors import safe_open
         from tokenizers import Tokenizer
 
@@ -69,9 +76,15 @@ class MiniLMProvider:
         self.tok.no_padding()
         self.tok.enable_truncation(max_length=max_tokens)
         self.batch_size = batch_size
+        self.query_prefix = query_prefix
+        self.passage_prefix = passage_prefix
         self.dim = int(self.w["embeddings.word_embeddings.weight"].shape[1])
         self.layers = 1 + max(int(k.split(".")[2]) for k in self.w if k.startswith("encoder.layer."))
-        self.model_id = f"{model_dir.name}-{hashlib.sha256(weights.stat().st_size.to_bytes(8, 'big')).hexdigest()[:8]}-t{max_tokens}"
+        base_id = f"{model_dir.name}-{hashlib.sha256(weights.stat().st_size.to_bytes(8, 'big')).hexdigest()[:8]}-t{max_tokens}"
+        if query_prefix or passage_prefix:
+            prefix_hash = hashlib.sha256(f"{query_prefix}\n{passage_prefix}".encode()).hexdigest()[:6]
+            base_id += f"-{prefix_hash}"
+        self.model_id = base_id
 
     def _encode_batch(self, ids: list[list[int]]) -> np.ndarray:
         w = self.w
@@ -116,7 +129,7 @@ class MiniLMProvider:
         norm = np.linalg.norm(pooled, axis=1, keepdims=True)
         return (pooled / np.maximum(norm, 1e-12)).astype(np.float32)
 
-    def embed(self, texts: list[str]) -> np.ndarray:
+    def _embed_prefixed(self, texts: list[str]) -> np.ndarray:
         if not texts:
             return np.zeros((0, self.dim), dtype=np.float32)
         ids = [e.ids for e in self.tok.encode_batch(texts)]
@@ -126,6 +139,17 @@ class MiniLMProvider:
             chunk = order[start : start + self.batch_size]
             out[chunk] = self._encode_batch([ids[i] for i in chunk])
         return out
+
+    def embed(self, texts: list[str]) -> np.ndarray:
+        return self.embed_passages(texts)
+
+    def embed_query(self, texts: list[str]) -> np.ndarray:
+        prefixed = [f"{self.query_prefix}{text}" for text in texts]
+        return self._embed_prefixed(prefixed)
+
+    def embed_passages(self, texts: list[str]) -> np.ndarray:
+        prefixed = [f"{self.passage_prefix}{text}" for text in texts]
+        return self._embed_prefixed(prefixed)
 
 
 class EmbeddingStore:
